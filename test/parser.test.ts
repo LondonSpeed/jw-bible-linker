@@ -1,0 +1,28 @@
+import { BookIndex, linkAll } from "../src/parser";
+import type { LinkSettings } from "../src/parser";
+
+const base: LinkSettings = {
+	linkType: "app", jwLocale: "ST", customLocale: "", labelStyle: "asTyped", labelLang: "et",
+	recognizedLangs: ["et", "en", "ru", "fi", "de"], priorityLang: "et", customAliases: "",
+};
+const idx = new BookIndex(base.recognizedLangs, "et", "");
+let fail = 0;
+const eq = (name: string, got: string, want: string) => {
+	if (got !== want) { fail++; console.log("FAIL", name, "\n got ", got, "\n want", want); } else console.log("ok  ", name);
+};
+const run = (t: string, s: Partial<LinkSettings> = {}) => linkAll(t, idx, { ...base, ...s }).text;
+
+eq("estonian", run("Vt Joh 3:16."), "Vt [Joh 3:16](jwlibrary:///finder?bible=43003016&wtlocale=ST).");
+eq("english range", run("Read Matthew 24:14-15 now", { jwLocale: "E" }), "Read [Matthew 24:14–15](jwlibrary:///finder?bible=40024014-40024015&wtlocale=E) now");
+eq("multiword", run("Apostlite teod 2:1"), "[Apostlite teod 2:1](jwlibrary:///finder?bible=44002001&wtlocale=ST)");
+eq("numbered", run("1. Moosese 1:1"), "[1. Moosese 1:1](jwlibrary:///finder?bible=01001001&wtlocale=ST)");
+eq("russian", run("Иоанна 3:16"), "[Иоанна 3:16](jwlibrary:///finder?bible=43003016&wtlocale=ST)");
+eq("german", run("Röm 8:28"), "[Röm 8:28](jwlibrary:///finder?bible=45008028&wtlocale=ST)");
+eq("inherit ;", run("Joh 3:16; 5:24"), "[Joh 3:16](jwlibrary:///finder?bible=43003016&wtlocale=ST); [5:24](jwlibrary:///finder?bible=43005024&wtlocale=ST)");
+eq("full label en", run("Mt 6:33", { labelStyle: "full", labelLang: "en" }), "[Matthew 6:33](jwlibrary:///finder?bible=40006033&wtlocale=ST)");
+eq("web link", run("Ps 23:1", { linkType: "web", jwLocale: "E" }), "[Ps 23:1](https://www.jw.org/finder?srcid=jwlshare&wtlocale=E&prefer=lang&bible=19023001)");
+eq("skip existing link", run("[Joh 3:16](https://x.y) and `Joh 3:16`"), "[Joh 3:16](https://x.y) and `Joh 3:16`");
+eq("no false positive", run("Kell 10:30 algab"), "Kell 10:30 algab");
+eq("custom locale", run("Joh 1:1", { jwLocale: "custom", customLocale: "FI" }), "[Joh 1:1](jwlibrary:///finder?bible=43001001&wtlocale=FI)");
+console.log(fail ? `${fail} FAILED` : "ALL PASSED");
+process.exit(fail ? 1 : 0);
