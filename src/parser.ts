@@ -97,11 +97,14 @@ export function findRefs(text: string, index: BookIndex): FoundRef[] {
 	while ((m = re.exec(t))) {
 		const base = Math.max(0, m.index - 40);
 		const pre = t.slice(base, m.index).trimEnd();
-		const tokens = [...pre.matchAll(/\S+/g)];
+		const tokens: { index: number }[] = [];
+		const tokenRe = /\S+/g;
+		let tm: RegExpExecArray | null;
+		while ((tm = tokenRe.exec(pre))) tokens.push({ index: tm.index });
 		let book = 0;
 		let st = 0;
 		for (let k = Math.min(3, tokens.length); k >= 1; k--) {
-			const x = tokens[tokens.length - k].index as number;
+			const x = tokens[tokens.length - k].index;
 			book = index.find(pre.slice(x));
 			if (book) {
 				st = x;

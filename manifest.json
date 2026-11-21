@@ -1,7 +1,7 @@
 {
 	"id": "jw-bible-linker",
 	"name": "JW Bible Linker",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"minAppVersion": "1.4.0",
 	"description": "Turn Bible references typed in any language into links that open in JW Library, in the language you choose.",
 	"author": "SINU NIMI",

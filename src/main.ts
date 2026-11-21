@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Modal, Notice, Plugin, App, Setting } from "obsidian";
+import { Editor, Modal, Notice, Plugin, App, Setting } from "obsidian";
 import { BookIndex, LinkSettings, findInheritedTail, findRefs, linkAll, toMarkdown } from "./parser";
 import { DEFAULT_SETTINGS, JWSettingTab } from "./settings";
 
@@ -124,7 +124,8 @@ export default class JWBibleLinker extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = (await this.loadData()) as Partial<LinkSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, data ?? {});
 	}
 
 	async saveSettings() {
@@ -148,7 +149,7 @@ class RefModal extends Modal {
 			t.inputEl.addEventListener("keydown", (e) => {
 				if (e.key === "Enter") go();
 			});
-			setTimeout(() => t.inputEl.focus(), 0);
+			window.setTimeout(() => t.inputEl.focus(), 0);
 		});
 		new Setting(this.contentEl).addButton((b) => b.setButtonText("Insert").setCta().onClick(go));
 	}
