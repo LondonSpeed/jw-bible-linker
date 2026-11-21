@@ -26,7 +26,7 @@ export interface FoundRef {
 }
 
 const fold = (s: string) =>
-	s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s.]/g, "");
+	s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]/gu, "");
 const squash = (s: string) => s.replace(/(.)\1+/g, "$1");
 const pad = (n: number, w: number) => String(n).padStart(w, "0");
 
@@ -89,7 +89,7 @@ export function maskProtected(text: string): string {
 export function findRefs(text: string, index: BookIndex): FoundRef[] {
 	const t = maskProtected(text);
 	const out: FoundRef[] = [];
-	const re = /(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?/g;
+	const re = /(?<!\d)(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?(?!\d)/g;
 	let m: RegExpExecArray | null;
 	let prevBook = 0;
 	let prevEnd = 0;
@@ -98,7 +98,7 @@ export function findRefs(text: string, index: BookIndex): FoundRef[] {
 		const base = Math.max(0, m.index - 40);
 		const pre = t.slice(base, m.index).trimEnd();
 		const tokens: { index: number }[] = [];
-		const tokenRe = /\S+/g;
+		const tokenRe = /[\p{L}\p{N}]+\.?/gu;
 		let tm: RegExpExecArray | null;
 		while ((tm = tokenRe.exec(pre))) tokens.push({ index: tm.index });
 		let book = 0;
@@ -132,6 +132,7 @@ export function findRefs(text: string, index: BookIndex): FoundRef[] {
 			const raw = t.slice(base + st, m.index);
 			const lead = raw.match(/^[^\p{L}\p{N}]*/u)![0].length;
 			start = base + st + lead;
+			if (t[start - 1] === "#") start--; // "#Gen 1:1" -> plain link, "#" removed
 			bookText = raw.slice(lead).trim();
 			prevName = bookText;
 		}
