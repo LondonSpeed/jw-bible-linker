@@ -1,4 +1,4 @@
-import { BOOK_NAMES } from "./books";
+import { BOOK_NAMES, CHAPTERS } from "./books";
 import type { LangId } from "./books";
 
 export interface LinkSettings {
@@ -10,6 +10,7 @@ export interface LinkSettings {
 	recognizedLangs: LangId[]; // languages in which references are recognised
 	priorityLang: LangId; // wins when an abbreviation exists in several languages
 	customAliases: string; // lines like "Jn=43"
+	autoLink: boolean; // convert references while typing
 }
 
 export interface FoundRef {
@@ -112,6 +113,7 @@ export function findRefs(text: string, index: BookIndex): FoundRef[] {
 			book = prevBook;
 			inherited = true;
 		}
+		if (book && (+m[1] < 1 || +m[1] > CHAPTERS[book - 1])) book = 0; // chapter does not exist
 		if (!book) {
 			prevBook = 0;
 			continue;
@@ -180,4 +182,33 @@ export function linkAll(text: string, index: BookIndex, s: LinkSettings): { text
 		out = out.slice(0, refs[i].start) + toMarkdown(refs[i], s) + out.slice(refs[i].end);
 	}
 	return { text: out, count: refs.length };
+}
+
+/**
+ * Finds a continuation like "; 5:24" at the very end of `before` when the previous
+ * reference is already a JW Library link, e.g. "[Joh 3:16](jwlibrary:///finder?bible=43003016&wtlocale=ST); 5:24".
+ */
+export function findInheritedTail(before: string): FoundRef | null {
+	const m =
+		/\]\((?:jwlibrary:\/\/\/finder\?bible=|https:\/\/www\.jw\.org\/finder\?[^)\s]*?bible=)(\d{2})\d{6}(?:-\d{8})?[^)]*\)\s*;\s*(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?$/.exec(
+			before
+		);
+	if (!m) return null;
+	const book = +m[1];
+	const chapter = +m[2];
+	if (book < 1 || book > 66 || chapter < 1 || chapter > CHAPTERS[book - 1]) return null;
+	const tail = /(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?$/.exec(before)!;
+	const v1 = +m[3];
+	const v2 = m[4] ? +m[4] : 0;
+	return {
+		start: tail.index,
+		end: before.length,
+		text: tail[0],
+		book,
+		chapter,
+		verse: v1,
+		endVerse: v2 > v1 ? v2 : undefined,
+		inherited: true,
+		bookText: "",
+	};
 }

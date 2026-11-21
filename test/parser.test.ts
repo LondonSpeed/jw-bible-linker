@@ -1,9 +1,9 @@
-import { BookIndex, linkAll } from "../src/parser";
+import { BookIndex, linkAll, findInheritedTail } from "../src/parser";
 import type { LinkSettings } from "../src/parser";
 
 const base: LinkSettings = {
 	linkType: "app", jwLocale: "ST", customLocale: "", labelStyle: "asTyped", labelLang: "et",
-	recognizedLangs: ["et", "en", "ru", "fi", "de"], priorityLang: "et", customAliases: "",
+	recognizedLangs: ["et", "en", "ru", "fi", "de"], priorityLang: "et", customAliases: "", autoLink: true,
 };
 const idx = new BookIndex(base.recognizedLangs, "et", "");
 let fail = 0;
@@ -24,5 +24,11 @@ eq("web link", run("Ps 23:1", { linkType: "web", jwLocale: "E" }), "[Ps 23:1](ht
 eq("skip existing link", run("[Joh 3:16](https://x.y) and `Joh 3:16`"), "[Joh 3:16](https://x.y) and `Joh 3:16`");
 eq("no false positive", run("Kell 10:30 algab"), "Kell 10:30 algab");
 eq("custom locale", run("Joh 1:1", { jwLocale: "custom", customLocale: "FI" }), "[Joh 1:1](jwlibrary:///finder?bible=43001001&wtlocale=FI)");
+eq("bad chapter rejected", run("Mar 99:1"), "Mar 99:1");
+const tail = findInheritedTail("Vt [Joh 3:16](jwlibrary:///finder?bible=43003016&wtlocale=ST); 5:24");
+eq("tail book", String(tail?.book), "43");
+eq("tail text", tail?.text ?? "", "5:24");
+eq("tail web", String(findInheritedTail("[Ps 23:1](https://www.jw.org/finder?srcid=jwlshare&wtlocale=E&prefer=lang&bible=19023001); 24:1")?.book), "19");
+eq("tail none", String(findInheritedTail("Joh 3:16; 5:24")), "null");
 console.log(fail ? `${fail} FAILED` : "ALL PASSED");
 process.exit(fail ? 1 : 0);

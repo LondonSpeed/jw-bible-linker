@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: LinkSettings = {
 	recognizedLangs: ["et", "en", "ru", "fi", "de"],
 	priorityLang: "et",
 	customAliases: "",
+	autoLink: true,
 };
 
 export class JWSettingTab extends PluginSettingTab {
@@ -26,6 +27,16 @@ export class JWSettingTab extends PluginSettingTab {
 		const save = async () => {
 			await this.plugin.saveSettings();
 		};
+
+		new Setting(containerEl)
+			.setName("Link automatically while typing")
+			.setDesc("When you finish a reference (type a space, comma, full stop or press Enter after it), it becomes a link right away.")
+			.addToggle((t) =>
+				t.setValue(s.autoLink).onChange(async (v) => {
+					s.autoLink = v;
+					await save();
+				})
+			);
 
 		new Setting(containerEl).setName("JW Library").setHeading();
 

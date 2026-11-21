@@ -1,6 +1,6 @@
 {
 	"name": "jw-bible-linker",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Obsidian plugin: Bible references to JW Library links",
 	"main": "main.js",
 	"scripts": {
