@@ -1,4 +1,5 @@
 import { Editor, Modal, Notice, Plugin, App, Setting } from "obsidian";
+import { EditorView } from "@codemirror/view";
 import { BookIndex, LinkSettings, findInheritedTail, findRefs, linkAll, toMarkdown } from "./parser";
 import { DEFAULT_SETTINGS, JWSettingTab } from "./settings";
 
@@ -6,7 +7,6 @@ export default class JWBibleLinker extends Plugin {
 	settings: LinkSettings = { ...DEFAULT_SETTINGS };
 	index!: BookIndex;
 	private busy = false;
-	private lastAuto: { line: number; raw: string } | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -34,7 +34,9 @@ export default class JWBibleLinker extends Plugin {
 			},
 		});
 
-		this.registerEvent(this.app.workspace.on("editor-change", (editor) => this.autoLink(editor)));
+		// A CodeMirror extension (not the workspace "editor-change" event) so that it also works
+		// in editors that are not a normal note view, e.g. text cards in Canvas.
+		this.registerEditorExtension(this.autoLinkExtension());
 
 		this.registerEvent(
 			this.app.workspace.on("editor-menu", (menu, editor) => {
@@ -48,49 +50,59 @@ export default class JWBibleLinker extends Plugin {
 		);
 	}
 
-	/** Called after every edit: links a reference that was just finished by a delimiter. */
-	autoLink(editor: Editor) {
-		if (!this.settings.autoLink || this.busy || editor.somethingSelected()) return;
-		const cur = editor.getCursor();
-		let lineNo = cur.line;
-		let delim: number;
-		if (cur.ch === 0) {
-			if (cur.line === 0) return;
-			lineNo = cur.line - 1; // Enter pressed: check the line that was just finished
-			delim = editor.getLine(lineNo).length;
-		} else {
-			const c = editor.getLine(lineNo)[cur.ch - 1];
-			if (!c || !/[\s,.;!?)\]"'”’»…]/.test(c)) return;
-			delim = cur.ch - 1;
-		}
-		const line = editor.getLine(lineNo);
-		if (!/\d:\d/.test(line)) return;
-		if (this.inProtectedBlock(editor, lineNo)) return;
+	/** Watches every CodeMirror editor (notes, Canvas cards, embeds) for typed input. */
+	private autoLinkExtension() {
+		return EditorView.updateListener.of((u) => {
+			if (!this.settings.autoLink || !u.docChanged || this.busy) return;
+			if (!u.transactions.some((tr) => tr.isUserEvent("input"))) return; // typing, paste, Enter - not undo/redo or our own change
+			const view = u.view;
+			// dispatching inside an update listener is not allowed, so do it right after
+			window.setTimeout(() => this.autoLink(view), 0);
+		});
+	}
 
-		const ref = findRefs(line, this.index).find((r) => r.end === delim) ?? findInheritedTail(line.slice(0, delim));
-		if (!ref) return;
-		// right after an undo the raw text comes back: do not link the same thing again
-		if (this.lastAuto && this.lastAuto.line === lineNo && this.lastAuto.raw === ref.text) {
-			this.lastAuto = null;
-			return;
+	/** Links a reference that was just finished by a delimiter (space, comma, full stop, Enter ...). */
+	autoLink(view: EditorView) {
+		if (!this.settings.autoLink || this.busy || view.composing) return;
+		const doc = view.state.doc;
+		const sel = view.state.selection.main;
+		if (view.state.selection.ranges.length !== 1 || !sel.empty) return;
+		let line = doc.lineAt(sel.head);
+		let delim: number; // offset of the delimiter inside the line
+		if (sel.head === line.from) {
+			if (line.number === 1) return;
+			line = doc.line(line.number - 1); // Enter pressed: check the line that was just finished
+			delim = line.length;
+		} else {
+			const c = doc.sliceString(sel.head - 1, sel.head);
+			if (!/[\s,.;!?)\]"'”’»…]/.test(c)) return;
+			delim = sel.head - 1 - line.from;
 		}
-		this.lastAuto = { line: lineNo, raw: ref.text };
+		const text = line.text;
+		if (!/\d:\d/.test(text)) return;
+		if (this.inProtectedBlock((i) => doc.line(i).text, line.number)) return;
+
+		const ref = findRefs(text, this.index).find((r) => r.end === delim) ?? findInheritedTail(text.slice(0, delim));
+		if (!ref) return;
 		this.busy = true;
 		try {
-			editor.replaceRange(toMarkdown(ref, this.settings), { line: lineNo, ch: ref.start }, { line: lineNo, ch: ref.end });
+			view.dispatch({
+				changes: { from: line.from + ref.start, to: line.from + ref.end, insert: toMarkdown(ref, this.settings) },
+				userEvent: "jwlinker.auto",
+			});
 		} finally {
 			this.busy = false;
 		}
 	}
 
-	/** True inside frontmatter or a fenced code block. */
-	private inProtectedBlock(editor: Editor, lineNo: number): boolean {
-		let frontmatter = editor.getLine(0) === "---";
+	/** True inside frontmatter or a fenced code block. `getLine` takes a 1-based line number. */
+	private inProtectedBlock(getLine: (n: number) => string, lineNo: number): boolean {
+		let frontmatter = getLine(1) === "---";
 		let fence = false;
-		for (let i = 0; i < lineNo; i++) {
-			const l = editor.getLine(i);
+		for (let n = 1; n < lineNo; n++) {
+			const l = getLine(n);
 			if (frontmatter) {
-				if (i > 0 && l === "---") frontmatter = false;
+				if (n > 1 && l === "---") frontmatter = false;
 				continue;
 			}
 			if (/^\s*(```|~~~)/.test(l)) fence = !fence;
