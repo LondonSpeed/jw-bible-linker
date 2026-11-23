@@ -160,6 +160,8 @@ export function findRefs(text: string, index: BookIndex): FoundRef[] {
 			if (it.a === run[run.length - 1].b + 1) run.push(it);
 			else runs.push([it]);
 		}
+		const chapterNo = +m[1];
+		const numsStart = m.index;
 		runs.forEach((run, k) => {
 			const first = run[0];
 			const last = run[run.length - 1];
@@ -171,12 +173,12 @@ export function findRefs(text: string, index: BookIndex): FoundRef[] {
 				end: last.e,
 				text: text.slice(s0, last.e),
 				book,
-				chapter: +m[1],
+				chapter: chapterNo,
 				verse: a,
 				endVerse: z > a ? z : undefined,
 				inherited: k > 0 || inherited,
 				bookText,
-				rawNums: k === 0 && run.length > 1 ? text.slice(m.index, last.e) : undefined,
+				rawNums: k === 0 && run.length > 1 ? text.slice(numsStart, last.e) : undefined,
 			});
 		});
 		prevBook = book;
