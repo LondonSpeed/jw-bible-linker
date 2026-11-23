@@ -1,7 +1,7 @@
 {
 	"id": "jw-bible-linker",
 	"name": "JW Bible Linker",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"minAppVersion": "1.4.0",
 	"description": "Turn Bible references (Joh 3:16, Joh 1:1,2) and publication issues (w24.01, wp25.09, g26.11) into links that open in JW Library, in the language you choose.",
 	"author": "LondonSpeed",
