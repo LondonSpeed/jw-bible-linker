@@ -188,10 +188,12 @@ export function findRefs(text: string, index: BookIndex): FoundRef[] {
 	return out;
 }
 
+const localeOf = (s: LinkSettings) => encodeURIComponent((s.jwLocale === "custom" ? s.customLocale : s.jwLocale).trim() || "E");
+
 export function buildUrl(r: { book: number; chapter: number; verse: number; endVerse?: number }, s: LinkSettings): string {
 	let code = pad(r.book, 2) + pad(r.chapter, 3) + pad(r.verse, 3);
 	if (r.endVerse) code += "-" + pad(r.book, 2) + pad(r.chapter, 3) + pad(r.endVerse, 3);
-	const loc = encodeURIComponent((s.jwLocale === "custom" ? s.customLocale : s.jwLocale).trim() || "E");
+	const loc = localeOf(s);
 	return s.linkType === "app"
 		? `jwlibrary:///finder?bible=${code}&wtlocale=${loc}`
 		: `https://www.jw.org/finder?srcid=jwlshare&wtlocale=${loc}&prefer=lang&bible=${code}`;
@@ -213,14 +215,64 @@ export function toMarkdown(r: FoundRef, s: LinkSettings): string {
 	return `[${buildLabel(r, s)}](${buildUrl(r, s)})`;
 }
 
+// ---------- publications: "w24.01", "wp25.09", "g26.11", "w08.09.01" ----------
+// Code and numbers are written together, without a space. "w 24.01" is deliberately not a link.
+export const PUB_CODES = ["w", "wp", "g", "mwb", "km"];
+
+export interface PubRef {
+	start: number;
+	end: number;
+	text: string;
+	pub: string;
+	issue: string; // YYYYMM or YYYYMMDD
+	hasDay: boolean;
+}
+
+const PUB_RE = new RegExp(`(?<![\\p{L}\\p{N}])(${PUB_CODES.join("|")})(\\d{2})\\.(\\d{1,2})(?:\\.(\\d{1,2}))?(?![\\p{L}\\p{N}])(?!\\.\\d)`, "giu");
+
+export function findPubRefs(text: string): PubRef[] {
+	const t = maskProtected(text);
+	const out: PubRef[] = [];
+	PUB_RE.lastIndex = 0;
+	let m: RegExpExecArray | null;
+	while ((m = PUB_RE.exec(t))) {
+		const yy = +m[2];
+		const mo = +m[3];
+		const day = m[4] ? +m[4] : 0;
+		if (mo < 1 || mo > 12 || (m[4] && (day < 1 || day > 31))) continue;
+		const year = yy >= 50 ? 1900 + yy : 2000 + yy;
+		out.push({
+			start: m.index,
+			end: m.index + m[0].length,
+			text: text.slice(m.index, m.index + m[0].length),
+			pub: m[1].toLowerCase(),
+			issue: `${year}${pad(mo, 2)}${day ? pad(day, 2) : ""}`,
+			hasDay: !!day,
+		});
+	}
+	return out;
+}
+
+export function pubUrl(r: PubRef, s: LinkSettings): string {
+	const loc = localeOf(s);
+	return s.linkType === "app"
+		? `jwlibrary:///finder?wtlocale=${loc}&pub=${r.pub}&issue=${r.issue}`
+		: `https://www.jw.org/finder?srcid=jwlshare&wtlocale=${loc}&prefer=lang&pub=${r.pub}&issue=${r.issue}`;
+}
+
+export const pubToMarkdown = (r: PubRef, s: LinkSettings): string => `[${r.text}](${pubUrl(r, s)})`;
+
 /** Convert every reference in `text`; returns new text and number of links made. */
 export function linkAll(text: string, index: BookIndex, s: LinkSettings): { text: string; count: number } {
 	const refs = findRefs(text, index);
+	const pubs = findPubRefs(text).filter((p) => !refs.some((r) => p.start < r.end && r.start < p.end));
+	const all: { start: number; end: number; md: string }[] = [
+		...refs.map((r) => ({ start: r.start, end: r.end, md: toMarkdown(r, s) })),
+		...pubs.map((p) => ({ start: p.start, end: p.end, md: pubToMarkdown(p, s) })),
+	].sort((x, y) => x.start - y.start);
 	let out = text;
-	for (let i = refs.length - 1; i >= 0; i--) {
-		out = out.slice(0, refs[i].start) + toMarkdown(refs[i], s) + out.slice(refs[i].end);
-	}
-	return { text: out, count: refs.length };
+	for (let i = all.length - 1; i >= 0; i--) out = out.slice(0, all[i].start) + all[i].md + out.slice(all[i].end);
+	return { text: out, count: all.length };
 }
 
 /**
@@ -289,6 +341,12 @@ export interface Edit {
  */
 export function autoLinkEdits(line: string, delim: number, index: BookIndex, s: LinkSettings): Edit[] {
 	if (!/\d/.test(line)) return [];
+	// publication: link when the delimiter follows it. A "." right after "w08.09" may still become "w08.09.01", so wait;
+	// a sentence-final "." ("see w24.01.") is linked when the next delimiter (space, Enter) comes.
+	const pub = findPubRefs(line).find(
+		(p) => (p.end === delim && !(line[delim] === "." && !p.hasDay)) || (p.end === delim - 1 && line[p.end] === ".")
+	);
+	if (pub) return [{ start: pub.start, end: pub.end, insert: pubToMarkdown(pub, s) }];
 	const refs = findRefs(line, index);
 	let i = refs.findIndex((r) => r.end === delim);
 	if (i >= 0) {
