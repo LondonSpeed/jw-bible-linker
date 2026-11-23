@@ -1,6 +1,6 @@
 import { Editor, Modal, Notice, Plugin, App, Setting } from "obsidian";
 import { EditorView } from "@codemirror/view";
-import { BookIndex, LinkSettings, findInheritedTail, findRefs, linkAll, toMarkdown } from "./parser";
+import { BookIndex, LinkSettings, autoLinkEdits, findRefs, linkAll, toMarkdown } from "./parser";
 import { DEFAULT_SETTINGS, JWSettingTab } from "./settings";
 
 export default class JWBibleLinker extends Plugin {
@@ -79,15 +79,14 @@ export default class JWBibleLinker extends Plugin {
 			delim = sel.head - 1 - line.from;
 		}
 		const text = line.text;
-		if (!/\d:\d/.test(text)) return;
 		if (this.inProtectedBlock((i) => doc.line(i).text, line.number)) return;
 
-		const ref = findRefs(text, this.index).find((r) => r.end === delim) ?? findInheritedTail(text.slice(0, delim));
-		if (!ref) return;
+		const edits = autoLinkEdits(text, delim, this.index, this.settings);
+		if (!edits.length) return;
 		this.busy = true;
 		try {
 			view.dispatch({
-				changes: { from: line.from + ref.start, to: line.from + ref.end, insert: toMarkdown(ref, this.settings) },
+				changes: edits.map((e) => ({ from: line.from + e.start, to: line.from + e.end, insert: e.insert })),
 				userEvent: "jwlinker.auto",
 			});
 		} finally {

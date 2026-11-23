@@ -5,6 +5,7 @@ Type a Bible reference in **any supported language** (Estonian, English, Russian
 
 - `Joh 3:16`, `Apostlite teod 2:1`, `Mt 24:14-15`, `Иоанна 3:16; 5:24` -> clickable links
 - Commands: *Link Bible references* (selection or whole note), *Insert Bible reference link…*, editor right-click menu
+- Verse lists: `Joh 1:1,2` (one link for neighbouring verses), `Mt 1:1; 1:5; 3:1` (a link each, book remembered)
 - Works in notes and in Canvas text cards (the automatic link-while-typing is a CodeMirror extension)
 - Settings: JW Library language, app link vs jw.org link, link text style, recognised languages, custom abbreviations
 

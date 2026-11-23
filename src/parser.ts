@@ -23,6 +23,7 @@ export interface FoundRef {
 	endVerse?: number;
 	inherited: boolean; // "; 5:24" after "John 3:16" - book taken from previous ref
 	bookText: string; // book name as typed
+	rawNums?: string; // numbers as typed when a verse list was merged, e.g. "1:1,2"
 }
 
 const fold = (s: string) =>
@@ -136,19 +137,51 @@ export function findRefs(text: string, index: BookIndex): FoundRef[] {
 			bookText = raw.slice(lead).trim();
 			prevName = bookText;
 		}
-		prevBook = book;
-		prevEnd = m.index + m[0].length;
-		out.push({
-			start,
-			end: prevEnd,
-			text: text.slice(start, prevEnd),
-			book,
-			chapter: +m[1],
-			verse: v1,
-			endVerse: v2 > v1 ? v2 : undefined,
-			inherited,
-			bookText,
+
+		// verse list after the first verse: "1:1,2", "1:1-3,5,7-9" (a comma followed by a number that is not a chapter)
+		type Item = { a: number; b: number; s: number; e: number };
+		let lastEnd = m.index + m[0].length;
+		const items: Item[] = [{ a: v1, b: v2 > v1 ? v2 : v1, s: m.index, e: lastEnd }];
+		const cont = /,\s?(\d{1,3})(?:[-–](\d{1,3}))?(?![\d:\p{L}])/uy;
+		for (;;) {
+			cont.lastIndex = lastEnd;
+			const c = cont.exec(t);
+			if (!c) break;
+			const a = +c[1];
+			const z = c[2] ? +c[2] : a;
+			const e = c.index + c[0].length;
+			items.push({ a, b: z > a ? z : a, s: c.index + c[0].indexOf(c[1]), e });
+			lastEnd = e;
+		}
+		// neighbouring verses become one link (1,2 -> 1-2), the others get a link each
+		const runs: Item[][] = [[items[0]]];
+		for (const it of items.slice(1)) {
+			const run = runs[runs.length - 1];
+			if (it.a === run[run.length - 1].b + 1) run.push(it);
+			else runs.push([it]);
+		}
+		runs.forEach((run, k) => {
+			const first = run[0];
+			const last = run[run.length - 1];
+			const a = first.a;
+			const z = last.b;
+			const s0 = k === 0 ? start : first.s;
+			out.push({
+				start: s0,
+				end: last.e,
+				text: text.slice(s0, last.e),
+				book,
+				chapter: +m[1],
+				verse: a,
+				endVerse: z > a ? z : undefined,
+				inherited: k > 0 || inherited,
+				bookText,
+				rawNums: k === 0 && run.length > 1 ? text.slice(m.index, last.e) : undefined,
+			});
 		});
+		prevBook = book;
+		prevEnd = lastEnd;
+		re.lastIndex = lastEnd;
 	}
 	return out;
 }
@@ -169,8 +202,8 @@ function bookLabel(book: number, s: LinkSettings, typed: string): string {
 }
 
 export function buildLabel(r: FoundRef, s: LinkSettings): string {
-	const nums = `${r.chapter}:${r.verse}${r.endVerse ? "–" + r.endVerse : ""}`;
 	if (r.inherited) return r.text; // "5:24" stays as typed
+	const nums = r.rawNums ?? `${r.chapter}:${r.verse}${r.endVerse ? "–" + r.endVerse : ""}`;
 	return `${bookLabel(r.book, s, r.bookText)} ${nums}`.trim();
 }
 
@@ -215,4 +248,60 @@ export function findInheritedTail(before: string): FoundRef | null {
 		inherited: true,
 		bookText: "",
 	};
+}
+
+/**
+ * A verse continuation right after a link: "[Joh 1:1](...),2" -> one link for verses 1-2
+ * (neighbouring verse), otherwise the new number gets a link of its own.
+ */
+export function findVerseTail(before: string): { start: number; end: number; insert: string } | null {
+	const m =
+		/\[([^\]]*)\]\(((?:jwlibrary:\/\/\/finder\?bible=|https:\/\/www\.jw\.org\/finder\?[^)\s]*?bible=))(\d{2})(\d{3})(\d{3})(?:-\d{2}\d{3}(\d{3}))?([^)]*)\)(\s*,\s?)(\d{1,3})(?:([-–])(\d{1,3}))?$/.exec(
+			before
+		);
+	if (!m) return null;
+	const [, label, prefix, book, chapter, v1s, vEndS, suffix, sep, n1s, dash, n2s] = m;
+	const v1 = +v1s;
+	const last = vEndS ? +vEndS : v1;
+	const n1 = +n1s;
+	const n2 = n2s ? +n2s : 0;
+	const typed = n1s + (n2s ? dash + n2s : "");
+	const urlFor = (a: number, z: number) => `${prefix}${book}${chapter}${pad(a, 3)}${z > a ? "-" + book + chapter + pad(z, 3) : ""}${suffix}`;
+	const end = n2 > n1 ? n2 : n1;
+	if (n1 === last + 1) {
+		return { start: m.index, end: before.length, insert: `[${label}${sep.trimStart()}${typed}](${urlFor(v1, end)})` };
+	}
+	const at = before.length - typed.length;
+	return { start: at, end: before.length, insert: `[${typed}](${urlFor(n1, end)})` };
+}
+
+export interface Edit {
+	start: number;
+	end: number;
+	insert: string;
+}
+
+/**
+ * What to change in `line` after a delimiter was typed at offset `delim`.
+ * Returns edits in ascending order (apply them from the last to the first).
+ */
+export function autoLinkEdits(line: string, delim: number, index: BookIndex, s: LinkSettings): Edit[] {
+	if (!/\d/.test(line)) return [];
+	const refs = findRefs(line, index);
+	let i = refs.findIndex((r) => r.end === delim);
+	if (i >= 0) {
+		const out: Edit[] = [];
+		for (;;) {
+			const r = refs[i];
+			out.unshift({ start: r.start, end: r.end, insert: toMarkdown(r, s) });
+			if (!r.inherited || i === 0) break;
+			i--; // "Joh 3:16; 5:24" or "Joh 1:1,3": the earlier parts belong to the same group
+		}
+		return out;
+	}
+	const before = line.slice(0, delim);
+	const tail = findInheritedTail(before);
+	if (tail) return [{ start: tail.start, end: tail.end, insert: toMarkdown(tail, s) }];
+	const verse = findVerseTail(before);
+	return verse ? [verse] : [];
 }
