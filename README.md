@@ -18,7 +18,8 @@ Magazine issues are linked when the code and the numbers are written **together,
 | `wp25.09` | The Watchtower (Public Edition), issue 2025-09 |
 | `g26.11` | Awake!, issue 2026-11 |
 | `mwb24.03`, `km15.02` | Meeting workbook, Our Kingdom Ministry |
-| `w08.09.01` | Older issues with a day: 2008-09-01 |
+| `w08.09.15` | Older issues with a day: study edition of 2008-09-15 |
+| `w08.09.01` | 2008-2015, dated the 1st: the public edition (the plugin uses `wp` for you) |
 
 `w 24.01`, a bare `w` or `Watchtower` are never turned into links. The number is the issue code used by jw.org (for Awake! and the public Watchtower it is not always the calendar month). Page and paragraph stay plain text: `w24.01 lk 12`.
 
