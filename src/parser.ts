@@ -230,34 +230,73 @@ export interface PubRef {
 
 const PUB_RE = new RegExp(`(?<![\\p{L}\\p{N}])(${PUB_CODES.join("|")})(\\d{2})\\.(\\d{1,2})(?:\\.(\\d{1,2}))?(?![\\p{L}\\p{N}])(?!\\.\\d)`, "giu");
 
+/**
+ * Citation style with a space after code+year: "w01 8/15" (English: month/day) or "w01 15/8" (Estonian: day/month).
+ * Only the Watchtower, whose semi-monthly issues are dated the 1st or the 15th, so the order is always clear:
+ * "9/1" can only be September 1 and "1/9" only 1 September.
+ */
+const PUB_CITE_RE = /(?<![\p{L}\p{N}])(wp|w)(\d{2}) (\d{1,2})\/(\d{1,2})(?![\p{L}\p{N}\/])/giu;
+
+function dayMonth(a: number, b: number): { month: number; day: number } | null {
+	const isDay = (n: number) => n === 1 || n === 15;
+	const isMonth = (n: number) => n >= 1 && n <= 12;
+	if (isMonth(a) && isDay(b)) return { month: a, day: b }; // 8/15, 9/1
+	if (isDay(a) && isMonth(b)) return { month: b, day: a }; // 15/8, 1/9
+	return null;
+}
+
 export function findPubRefs(text: string): PubRef[] {
 	const t = maskProtected(text);
 	const out: PubRef[] = [];
+	const yearOf = (yy: number) => (yy >= 50 ? 1900 + yy : 2000 + yy);
 	PUB_RE.lastIndex = 0;
 	let m: RegExpExecArray | null;
 	while ((m = PUB_RE.exec(t))) {
-		const yy = +m[2];
 		const mo = +m[3];
 		const day = m[4] ? +m[4] : 0;
 		if (mo < 1 || mo > 12 || (m[4] && (day < 1 || day > 31))) continue;
-		const year = yy >= 50 ? 1900 + yy : 2000 + yy;
 		out.push({
 			start: m.index,
 			end: m.index + m[0].length,
 			text: text.slice(m.index, m.index + m[0].length),
 			pub: m[1].toLowerCase(),
-			issue: `${year}${pad(mo, 2)}${day ? pad(day, 2) : ""}`,
+			issue: `${yearOf(+m[2])}${pad(mo, 2)}${day ? pad(day, 2) : ""}`,
 			hasDay: !!day,
 		});
 	}
-	return out;
+	PUB_CITE_RE.lastIndex = 0;
+	while ((m = PUB_CITE_RE.exec(t))) {
+		const dm = dayMonth(+m[3], +m[4]);
+		if (!dm) continue;
+		out.push({
+			start: m.index,
+			end: m.index + m[0].length,
+			text: text.slice(m.index, m.index + m[0].length),
+			pub: m[1].toLowerCase(),
+			issue: `${yearOf(+m[2])}${pad(dm.month, 2)}${pad(dm.day, 2)}`,
+			hasDay: true,
+		});
+	}
+	return out.sort((x, y) => x.start - y.start);
+}
+
+/**
+ * From January 2008 to December 2015 The Watchtower had two editions: the issue dated the 1st is the public edition
+ * (pub "wp", e.g. wp20080101) and the one dated the 15th is the study edition (pub "w", e.g. w20080115).
+ * So "w08.09.01" means the public edition of 1 September 2008.
+ */
+export function pubCode(r: PubRef): string {
+	const year = +r.issue.slice(0, 4);
+	if (r.pub === "w" && r.hasDay && r.issue.slice(6) === "01" && year >= 2008 && year <= 2015) return "wp";
+	return r.pub;
 }
 
 export function pubUrl(r: PubRef, s: LinkSettings): string {
 	const loc = localeOf(s);
+	const pub = pubCode(r);
 	return s.linkType === "app"
-		? `jwlibrary:///finder?wtlocale=${loc}&pub=${r.pub}&issue=${r.issue}`
-		: `https://www.jw.org/finder?srcid=jwlshare&wtlocale=${loc}&prefer=lang&pub=${r.pub}&issue=${r.issue}`;
+		? `jwlibrary:///finder?wtlocale=${loc}&pub=${pub}&issue=${r.issue}`
+		: `https://www.jw.org/finder?srcid=jwlshare&wtlocale=${loc}&prefer=lang&pub=${pub}&issue=${r.issue}`;
 }
 
 export const pubToMarkdown = (r: PubRef, s: LinkSettings): string => `[${r.text}](${pubUrl(r, s)})`;
