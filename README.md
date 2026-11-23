@@ -21,6 +21,10 @@ Magazine issues are linked when the code and the numbers are written **together,
 | `w08.09.15` | Older issues with a day: study edition of 2008-09-15 |
 | `w08.09.01` | 2008-2015, dated the 1st: the public edition (the plugin uses `wp` for you) |
 
+Citation style for the Watchtower (code and year stay together, then a space): `w01 8/15` (English: month/day) or `w01 15/8` (Estonian: day/month). The order is always clear because semi-monthly issues are dated the 1st or the 15th. From 2008 to 2015 the issue of the 1st is the public edition and the plugin uses `wp` for it.
+
+Page and paragraph are not part of the link and stay as plain text next to it: `w25.12 3, lõik 4`, `w01 8/15 31`. The link opens the issue.
+
 `w 24.01`, a bare `w` or `Watchtower` are never turned into links. The number is the issue code used by jw.org (for Awake! and the public Watchtower it is not always the calendar month). Page and paragraph stay plain text: `w24.01 lk 12`.
 
 Link format: `jwlibrary:///finder?bible=BBCCCVVV&wtlocale=CODE` (BB book 01-66, CCC chapter, VVV verse; ranges as `start-end`).
