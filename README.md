@@ -9,6 +9,19 @@ Type a Bible reference in **any supported language** (Estonian, English, Russian
 - Works in notes and in Canvas text cards (the automatic link-while-typing is a CodeMirror extension)
 - Settings: JW Library language, app link vs jw.org link, link text style, recognised languages, custom abbreviations
 
+## Publications
+Magazine issues are linked when the code and the numbers are written **together, without a space**:
+
+| Type | Result |
+|---|---|
+| `w24.01` | The Watchtower (Study Edition), 2024-01 |
+| `wp25.09` | The Watchtower (Public Edition), issue 2025-09 |
+| `g26.11` | Awake!, issue 2026-11 |
+| `mwb24.03`, `km15.02` | Meeting workbook, Our Kingdom Ministry |
+| `w08.09.01` | Older issues with a day: 2008-09-01 |
+
+`w 24.01`, a bare `w` or `Watchtower` are never turned into links. The number is the issue code used by jw.org (for Awake! and the public Watchtower it is not always the calendar month). Page and paragraph stay plain text: `w24.01 lk 12`.
+
 Link format: `jwlibrary:///finder?bible=BBCCCVVV&wtlocale=CODE` (BB book 01-66, CCC chapter, VVV verse; ranges as `start-end`).
 
 ## Develop
